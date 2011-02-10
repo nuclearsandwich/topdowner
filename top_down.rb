@@ -26,21 +26,22 @@ TokenTypes = { :start => /^program$/, :set => /^set$/,
 	:int_lit => /^[0-9]+$/,	:eof => /\$/
 }
 
-#Grammar = { :Program => [ :NonReturnStatement, :*, :ReturnStatement ],
-Grammar = { :Program => [ :ReturnStatement ],
-	:NonReturnStatement => [ :AssignmentStatement, :or, :DefineStatement ],
+## ::meta-grammar:: * => 0..n, + => 1..n, or => any ONE of the following. ##
+Grammar = {
+	:Program => [ :*, :NonReturnStatement, :ReturnStatement ],
+	:NonReturnStatement => [ :or, :AssignmentStatement, :DefineStatement ],
 	:AssignmentStatement => [ :set, :ident, :Expr ],
-	:DefineStatement => [ :define, :ident, :ArgList, :Program ],
-	:Arglist => [ :lparen, :ident, :+, :rparen ],
-	:Expr => [ :int_lit, :or, :ident, :or, :Application ],
-	:Application => [ :lparen, :Fname, :Expr, :*, :rparen ],
-	:Fname => [ :ident, :or, :math_op ],
-	:ReturnStatement => [ :return, :int_lit ]
+	:DefineStatement => [ :define, :ident, :Arglist, :Program ],
+	:Arglist => [ :lparen, :+, :ident, :rparen ],
+	:Expr => [ :or, :int_lit, :ident, :Application ],
+	:Application => [ :lparen, :Fname, :*, :Expr, :rparen ],
+	:Fname => [ :or, :ident, :math_op ],
+	:ReturnStatement => [ :return, :Expr ]
 }
 
 # Blow up on invalid args
 raise ArgumentError.new "too many arguments" if ARGV.length > 1
-raise ArgumentError.new "no string given" if ARGV.empty?
+raise ArgumentError.new "no argument given" if ARGV.empty?
 
 # A Token Type Detector
 def detect(token)
@@ -63,11 +64,33 @@ puts parsed_tokens
 @enumerator = parsed_tokens.each
 @tree = Hash.new
 
+# Returns a symbol describing what is constructed by the token(bitch) 
+# and lookahead. For a token :return and a lookahead :"4", it returns
+# :ReturnStatement. For a token :lparen and a lookahead :ident it would
+# return :Arglist.
+def recognize bitch, lookahead
+	@cache[:"#{bitch},#{lookahead}"] ||=
+		Grammar.each do |key, val|
+		# Let's assume our key is :ReturnStatement and our val is [:return, :int_lit]
+			if bitch == val[0] && lookahead == val[1]
+				return key
+			end
+		end
+end
+
+# Returns all valid token types of the first terminal in a construct.
+def first construct
+	return [Grammar.has_key? construct && first(Grammar[construct]) ||
+		construct].flatten
+end
+
 def parse recognizer
 	puts "Parsing: #{recognizer}"
 	case recognizer
 	# Array means nonliteral.
 	when Array
+		# check for meta-grammar
+		if recognizer.first == :*
 		return recognizer.map {|r| parse Grammar[r] || r}
 	# Symbol means literal
 	when Symbol
