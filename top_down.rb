@@ -18,25 +18,24 @@
 ## The terminals of the grammar are +, -, *, set, define, return, (, ).
 ## The token types are math_op, set, define, return, int_literal, identifier,
 ## lparen and rparen.
-#
-
 
 # Define all my token types using a standard Ruby hash.
-TokenTypes = { :start => /^program$/, :assignment => /^set$/,
-	:math_op => /^[-\*+]$/, :return => /^return$/, :definition => /^define$/,
-	:lparen => /^\($/, :rparen => /^)$/, :ident => /^[a-zA-Z][a-zA-Z0-9_]*$/,
+TokenTypes = { :start => /^program$/, :set => /^set$/,
+	:math_op => /^[-\*+]$/, :return => /^return$/, :define => /^define$/,
+	:lparen => /^\($/, :rparen => /^\)$/, :ident => /^[a-zA-Z][a-zA-Z0-9_]*$/,
 	:int_lit => /^[0-9]+$/,	:eof => /\$/
 }
 
-Recognizers = { :Program => :NonReturnStatement, :*, :ReturnStatement ],
-	:NonReturnStatement => [ :AssignmentStateMent, :or, :DefineStatement ],
-	:AssignmentStatement => [ :set, :ident, "Expr" ],
+#Grammar = { :Program => [ :NonReturnStatement, :*, :ReturnStatement ],
+Grammar = { :Program => [ :ReturnStatement ],
+	:NonReturnStatement => [ :AssignmentStatement, :or, :DefineStatement ],
+	:AssignmentStatement => [ :set, :ident, :Expr ],
 	:DefineStatement => [ :define, :ident, :ArgList, :Program ],
 	:Arglist => [ :lparen, :ident, :+, :rparen ],
 	:Expr => [ :int_lit, :or, :ident, :or, :Application ],
 	:Application => [ :lparen, :Fname, :Expr, :*, :rparen ],
 	:Fname => [ :ident, :or, :math_op ],
-	:ReturnStatement => [ :return, :Expr ]
+	:ReturnStatement => [ :return, :int_lit ]
 }
 
 # Blow up on invalid args
@@ -44,18 +43,46 @@ raise ArgumentError.new "too many arguments" if ARGV.length > 1
 raise ArgumentError.new "no string given" if ARGV.empty?
 
 # A Token Type Detector
-def detector(token)
+def detect(token)
 	TokenTypes.each do |type, matcher|
-		if bitch =~ matcher
-			return {bitch => type}
+		if token =~ matcher
+			return { :token => token, :type => type }
 		end
 	end
-	nil
+	raise ArgumentError.new "Unknown token type for #{token}"
 end
 
 # Tokenize and scan. 
 str = ARGV.shift
-tokens = str.gsub!(/[\n\t ]+/,' ').split(' ').map {|t| t.to_sym}
+tokens = str.gsub(/[\n\t ]+/,' ').split(' ').map {|t| t.to_sym}
 parsed_tokens = tokens.map do |token|
-	recognize(token)
+	detect(token)
 end
+
+puts parsed_tokens
+@enumerator = parsed_tokens.each
+@tree = Hash.new
+
+def parse recognizer
+	puts "Parsing: #{recognizer}"
+	case recognizer
+	# Array means nonliteral.
+	when Array
+		return recognizer.map {|r| parse Grammar[r] || r}
+	# Symbol means literal
+	when Symbol
+		tkn = @enumerator.next
+		puts tkn
+		if tkn[:type] == recognizer
+			# Base step of recursion
+			return tkn[:token]
+		else
+			raise ArgumentError.new "Got #{tkn}, expected #{recognizer}"
+		end
+	else raise ArgumentError.new "What the fuck?"
+	end
+end
+
+@tree[:Program] = parse Grammar[:Program]
+puts @tree
+
