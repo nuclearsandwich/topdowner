@@ -43,7 +43,7 @@ Grammar = {
 raise ArgumentError.new "too many arguments" if ARGV.length > 1
 raise ArgumentError.new "no argument given" if ARGV.empty?
 
-# A Token Type Detector
+## A Token Type Detector ##
 def detect(token)
 	TokenTypes.each do |type, matcher|
 		if token =~ matcher
@@ -64,6 +64,7 @@ puts parsed_tokens
 @enumerator = parsed_tokens.each
 @tree = Hash.new
 
+## Recognizer ##
 # Returns a symbol describing what is constructed by the token(bitch) 
 # and lookahead. For a token :return and a lookahead :"4", it returns
 # :ReturnStatement. For a token :lparen and a lookahead :ident it would
@@ -72,7 +73,8 @@ def recognize bitch, lookahead
 	@cache[:"#{bitch},#{lookahead}"] ||=
 		Grammar.each do |key, val|
 		# Let's assume our key is :ReturnStatement and our val is [:return, :int_lit]
-			if bitch == val[0] && lookahead == val[1]
+			if bitch == first(val[0])
+
 				return key
 			end
 		end
